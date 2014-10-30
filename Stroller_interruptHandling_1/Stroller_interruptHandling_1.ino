@@ -16,8 +16,9 @@ int pin2 = 2;
 int hadRound=0;
 void countRPM(void)
 {
+  sleep_disable(); 
   detachInterrupt(0);
- hadRound=1;  
+  hadRound=1;  
 
 }
 
@@ -31,12 +32,12 @@ void enterSleep(void)
 {
   
   /* Setup pin2 as an interrupt and attach handler. */
+  sleep_enable();
   attachInterrupt(0, countRPM, LOW);
   delay(100);
   
   set_sleep_mode(SLEEP_MODE_PWR_DOWN);
   
-  sleep_enable();
   
   sleep_mode();
   
