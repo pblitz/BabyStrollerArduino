@@ -7,18 +7,25 @@ All rights reserved.
 
 #include <avr/sleep.h>
 #include <avr/power.h>
+/*
+ *
+ */
 
-#define distance 20
+#define distance 895 
 
 
 long distanceToDate=0;
+int pinOut = 13;
 int pin2 = 2;
 int hadRound=0;
+
 void countRPM(void)
 {
+//      Serial.println("In count");
+
   sleep_disable(); 
   detachInterrupt(0);
-  hadRound=1;  
+  hadRound=1;
 
 }
 
@@ -30,21 +37,31 @@ void countRPM(void)
  ***************************************************/
 void enterSleep(void)
 {
+//      Serial.println("Going to sleep");
   
   /* Setup pin2 as an interrupt and attach handler. */
+   if (digitalRead(2)==HIGH){
   sleep_enable();
+
   attachInterrupt(0, countRPM, LOW);
-  delay(100);
+    set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+//  delay(100);
+//  cli();
+//  sleep_bod_disable();
+//sei();
   
-  set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+
   
   
-  sleep_mode();
+  sleep_cpu();
   
   /* The program will continue from here. */
   
   /* First thing to do is disable sleep. */
   sleep_disable(); 
+   } else {
+//     Serial.println("not yet going to sleep"); 
+   }
 }
 
 
@@ -64,7 +81,8 @@ void setup()
   
   /* Setup the pin direction. */
   pinMode(pin2, INPUT);
-   
+  pinMode(pinOut, OUTPUT);
+  
   /* Clear the reset flag. */
   MCUSR &= ~(1<<WDRF);
   
@@ -101,8 +119,11 @@ volatile int f_wdt=1;
  ***************************************************/
 ISR(WDT_vect)
 {
-  Serial.print(millis());
-  Serial.println(" Watchdog overrun");
+//  Serial.print(millis());
+//  Serial.println(" Watchdog overrun");
+  Serial.println(" ");
+  Serial.print("Distance: ");
+  Serial.println(distanceToDate);
 }
 
 
@@ -121,17 +142,18 @@ int seconds=0;
 void loop()
 {
   if (hadRound==1) {
-   distanceToDate=distanceToDate+distance;
-  Serial.print("Distance is now: ");
-  Serial.print(distanceToDate);
-  Serial.print(" at  ");
-  Serial.println(millis());
-  hadRound=0;
-  delay(100);
-  } 
+    distanceToDate=distanceToDate+distance;
+    digitalWrite(pinOut,HIGH);
+//    Serial.print("Distance is now: ");
+//    Serial.print(distanceToDate);
+//    Serial.print(" at  ");
+//    Serial.println(millis());
+    hadRound=0;
     delay(100);
-      Serial.print(millis());
-
-      Serial.println(" going back to sleep");
-    enterSleep();
+  } 
+   digitalWrite(pinOut,LOW);
+//  Serial.print(millis());
+//  Serial.println("going back to sleep");
+//  delay(50);
+  enterSleep();
 }
