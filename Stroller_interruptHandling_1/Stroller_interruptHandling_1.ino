@@ -7,12 +7,14 @@ All rights reserved.
 
 #include <avr/sleep.h>
 #include <avr/power.h>
-/*
- *
+/* 
+* a single revoluion of the wheel has this distance in mm (89,5 cm)
  */
-
 #define distance 895 
-
+/*
+ * if true, print serial output
+ */
+int debug = 1;
 
 long distanceToDate=0;
 int pinOut = 13;
@@ -144,16 +146,20 @@ void loop()
   if (hadRound==1) {
     distanceToDate=distanceToDate+distance;
     digitalWrite(pinOut,HIGH);
-//    Serial.print("Distance is now: ");
-//    Serial.print(distanceToDate);
-//    Serial.print(" at  ");
-//    Serial.println(millis());
+    if (debug==HIGH) {
+      Serial.print("Distance is now: ");
+      Serial.print(distanceToDate);
+      Serial.print(" at  ");
+      Serial.println(millis());
+    }
     hadRound=0;
     delay(100);
   } 
    digitalWrite(pinOut,LOW);
-//  Serial.print(millis());
-//  Serial.println("going back to sleep");
-//  delay(50);
+   if (debug==HIGH) {
+    Serial.print(millis());
+    Serial.println("going back to sleep");
+    delay(50);
+   }
   enterSleep();
 }
