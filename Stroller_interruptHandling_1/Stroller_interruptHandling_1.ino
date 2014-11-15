@@ -29,11 +29,12 @@
   long distanceToDate=0;
   int pinOut = 13;
   int pin2 = 3;
-  int hadRound=LOW;
+  volatile  int hadRound=LOW;
   int inWakeLock=0;
   int ble_enabled = 0;
   const int ledPin =  12; 
-  long beginBLETime=0;
+  volatile long beginBLETime=0;
+  int countTimesSend=0;
   
   void countRPM(void)
   {
@@ -52,10 +53,10 @@
     ble_set_pins(6, 7);
   
     // Set your BLE Shield name here, max. length 10
-//    ble_set_name("Stroller");
+    ble_set_name("Stroller");
     // Init. and start BLE library.
-//    ble_begin();
-//    beginBLETime=millis();
+    ble_begin();
+    beginBLETime=millis();
   }
   
   
@@ -214,5 +215,33 @@
 //    ble_do_events();  
     delay(100);
     digitalWrite(ledPin,LOW);
-    enterSleep();
+    if (beginBLETime>0) {
+      // we don't go into sleep after one minute of pressing the BLE button!    
+      long runningMillis=millis()-beginBLETime;
+      
+      if (ble_available() )
+      {
+         // write to BLE (even if not connected)
+        String output = "D: ";
+        output+=distanceToDate;
+        output+="\n";
+        int length= output.length()+1;
+        char charBuf[length];
+        output.toCharArray(charBuf,output.length()+1);
+        for (int i=0; i<length;i++) {
+          ble_write(charBuf[i]);
+        } 
+  
+    }
+    if ( runningMillis>60000) {
+       // in the next iteration, stop this maddness and go back to sleep
+       beginBLETime=0;
+       countTimesSend=0;
+       
+    }
+    ble_do_events();  
+      
+    } else {
+      enterSleep();
+    }
   }
