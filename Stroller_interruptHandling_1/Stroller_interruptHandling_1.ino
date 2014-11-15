@@ -233,12 +233,14 @@
         } 
   
     }
-    if ( runningMillis>60000) {
+    if ( runningMillis>20000) {
        // in the next iteration, stop this maddness and go back to sleep
        beginBLETime=0;
        countTimesSend=0;
        
     }
+     attachInterrupt(0, countRPM, FALLING);
+
     ble_do_events();  
       
     } else {
