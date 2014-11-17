@@ -214,7 +214,6 @@
 //    }
 //    ble_do_events();  
     delay(100);
-    digitalWrite(ledPin,LOW);
     if (beginBLETime>0) {
       // we don't go into sleep after one minute of pressing the BLE button!    
       long runningMillis=millis()-beginBLETime;
@@ -242,8 +241,11 @@
      attachInterrupt(0, countRPM, FALLING);
 
     ble_do_events();  
-      
+          digitalWrite(ledPin,LOW);
+
     } else {
+          digitalWrite(ledPin,LOW);
+
       enterSleep();
     }
   }
