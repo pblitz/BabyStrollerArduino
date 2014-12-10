@@ -4,6 +4,7 @@
 #include <SD.h>
 #include <Wire.h>  
 #include <RTClib.h>
+//#include <Time.h>
 //#include <DS1307RTC.h>
 
 
@@ -11,17 +12,21 @@
  * a single revoluion of the wheel has this distance in mm (89,5 cm)
  */
 #define distance 895 
+#define interupt 3 // pin D1 on Leonardo!
+#define chipSelect 10
+//#define timeBetweenRounds 1800L // 30 minutes
+#define timeBetweenRounds 300L // 5 minutes  
+long curDistance = 0;  
+#define LED  13
 
-long curDistance = 0;
-int LED = 13;
-const int interupt = 3; // pin D1 on Leonardo!
-const int chipSelect = 10;
 File dataFile;
+File currentRunFile;
+File runs;
 RTC_DS1307 RTC;
 
 void setup()
 {  
-  pinMode(LED, OUTPUT);
+//  pinMode(LED, OUTPUT);
 
   attachInterrupt(interupt, BtnDownCB, FALLING );
 
@@ -30,7 +35,7 @@ void setup()
 
   // If you are using the Blend, uncomment below
   ble_set_pins(6, 7);
-  ble_set_name("Stroller");
+   ble_set_name("Stroller");
 
   // Init. and start BLE library.
   ble_begin();
@@ -44,9 +49,12 @@ void setup()
 
     // Open up the file we're going to log to!
     dataFile = SD.open("datalog.txt", FILE_WRITE);
-
+    currentRunFile = SD.open("currun.txt", FILE_WRITE);
+     runs=SD.open("run.txt",FILE_WRITE);
   }
-
+    Wire.begin();
+    RTC.begin();
+//  setSyncProvider(RTC.get);
 }
 
 
@@ -55,15 +63,97 @@ volatile int hadRound = 0;
 
 void loop()
 {
+        union {
+        char data[4];
+        long stamp;
+      } time;
+        time.stamp = RTC.now().unixtime();
+      char chrTime[10];
+      ltoa(time.stamp,chrTime,10);
   if (hadRound== 1) {
     // compare the time of the last logged or the current logged value
     // the actual calculation
+
       curDistance = curDistance + distance;
+
       // write to SD card
-      long time = RTC.now().unixtime();
-    
-  
-    
+
+      // here, we can write the full, readable timestamp:
+      dataFile.write(chrTime, 10);
+      dataFile.write(';');
+      dataFile.write('R');
+      dataFile.write('\n');
+      dataFile.flush();
+      currentRunFile.seek(0); // always start at the beginning of the file
+      // read the first four bytes of the file, that contain the last written timestamp
+      
+      union{
+        char data[4];
+        long stamp;
+      } lastTime ;
+      //read the last saved timestamp
+       lastTime.data[0]=currentRunFile.read();
+       lastTime.data[1]=currentRunFile.read();
+       lastTime.data[2]=currentRunFile.read();
+       lastTime.data[3]=currentRunFile.read();
+       
+      byte reset= 0;
+      if ((time.stamp-lastTime.stamp)>timeBetweenRounds) {
+        // we have a new file, reset the distance and save to a new file
+
+        char distanceBuf[10];
+        ltoa(curDistance,distanceBuf,10);
+                int length;
+
+   for (byte i = 0;i< sizeof(distanceBuf);i++){
+       if (distanceBuf[i]==NULL) {
+              length=i+1;
+              break;
+            } 
+         }
+         char outBuf[length];
+         for (byte i = 0;i<length;i++){
+            outBuf[i]=distanceBuf[i];
+         } 
+        runs.write(chrTime, 10);
+        runs.write(':');
+        runs.write(outBuf, length);
+        reset=1;
+        currentRunFile.read(); //";"
+//        currentRunFile.read();//"Distance" 1
+//        currentRunFile.read();//"Distance" 2
+//        currentRunFile.read();//"Distance" 3
+//        currentRunFile.read();//"Distance" 4
+//        currentRunFile.read();//";"
+
+        union{
+          char data[4];
+          long stamp;
+        } startingTime ;
+        
+       startingTime.data[0]=currentRunFile.read();
+       startingTime.data[1]=currentRunFile.read();
+       startingTime.data[2]=currentRunFile.read();
+         startingTime.data[3]=currentRunFile.read();
+        char startingTimeOut[10];
+        ltoa(startingTime.stamp,startingTimeOut,10);
+        runs.write(':');
+        runs.write(startingTimeOut, 10);
+        runs.write('\n');
+        runs.flush();
+        curDistance=distance;
+      } 
+      currentRunFile.seek(0);
+      currentRunFile.write(time.data, 4);
+//      currentRunFile.write(':');
+//      currentRunFile.write((unsigned char*)&curDistance, 4);      
+      if (reset==1) {
+        currentRunFile.write(':');
+        currentRunFile.write(time.data, 4); // origin time, will not be changed later on
+        currentRunFile.flush();
+      }      
+      
+      
       hadRound=0;
 
   }
@@ -75,31 +165,41 @@ void loop()
       temp = ble_read();
       if ('r' == temp) { // read comand from smartphone)
 //        int length = 4+sizeof(curDistance);
-        String output = "D:";
-        output+=curDistance;
-        output+="\n";
-        byte length= output.length()+1;
+//        String output = "D:";
+//        output+=curDistance;
+//        output+="\n";
+//        byte length= 8;
+          
+        
+        char distanceBuf[10];
+        
+        ltoa(curDistance,distanceBuf,10);
+        int length;
 
-        unsigned char charBuf[length];
-        charBuf[0]='D';
-        charBuf[1]=':';
-          ble_write('D');
-          ble_write(':');
-//           byte b[4];
-//           ble_write((int)curDistance>>24);
-//           ble_write((int)curDistance>>16);
-//           ble_write((int)curDistance>>8);
-//           ble_write((int)curDistance);
-//          IntegerToBytes(curDistance, b);
-          for (byte i=0; i<length; ++i) {
-              ble_write(charBuf[i]);
+   for (byte i = 0;i<sizeof(distanceBuf);i++){
+       if (distanceBuf[i]==NULL) {
+              length=i+1;
+              break;
+            } 
+         }
+         char outBuf[length];
+         for (byte i = 0;i<length;i++){
+            outBuf[i]=distanceBuf[i];
+         } 
+         
 
-          }
+
+//         ble_write(length);
+         ble_write('D');
+         ble_write(':');
+          ble_write_bytes((unsigned char *)outBuf,length);
           ble_write('\n');
+//          ble_write_bytes();
       } 
       else if ( 'c' == temp ) { // aCcept or commit command from smartphone, later used for resetting
         curDistance=0;
-        ble_write_bytes((unsigned char *)"reset", 5);
+        ble_write('r');
+        ble_write('\n');
       }
       //            temp = ble_read();
       //            if('o' == temp)
@@ -118,7 +218,7 @@ void loop()
     }
   }
   //    delay(100);
-  digitalWrite(LED,LOW);
+//  digitalWrite(LED,LOW);
   ble_do_events();  
 }
 
@@ -126,14 +226,16 @@ void BtnDownCB()
 {   
   PRR0 = 0x00;  // Power Reduction Register: open timer
   PRR1 = 0x00;
-  digitalWrite(LED,HIGH);
+//  digitalWrite(LED,HIGH);
   hadRound = 1;
   //    delay(100);  //jitters elimination
   //    if(LOW == digitalRead(1))
-  if ( ble_connected() )
-  {
-    ble_write_bytes((unsigned char *)"Button down", 11);
-  }
+//  if ( ble_connected() )
+//  {
+//    ble_write_bytes((unsigned char *)"Button down", 11);
+//  }
 
 }
+
+
 
