@@ -49,6 +49,8 @@
   void enableBLE(void) {
     Serial.println("Enabling BLE");
     digitalWrite(pinOut,HIGH);
+    uint8_t resetPin =4;
+    ble_reset(resetPin);
     //    ble_low_power();
     ble_set_pins(6, 7);
   
@@ -58,6 +60,20 @@
     ble_begin();
     beginBLETime=millis();
   }
+  
+  void stroller_ble_print() {
+  #if DEBUG
+    Serial.println("printing distance");
+  #endif
+  if (ble_connected()) {
+              char output[27];
+            // length of output should be: 5 fixed, 10 time, 12 distance;
+         sprintf(output,"D:%10lu:%10lu\n\n",millis(),distanceToDate);
+          
+          ble_write_bytes((unsigned char *)output,27);
+  }
+}
+
   
   
   /***************************************************
@@ -109,7 +125,7 @@
    ***************************************************/
   void setup()
   {
-    Serial.begin(9600);
+   Serial.begin(9600);
     
     /* Setup the pin direction. */
     pinMode(pin2, INPUT);
@@ -117,24 +133,24 @@
     pinMode(ledPin, OUTPUT);  
     // Disabled the watchdog service for now
     /* Clear the reset flag. */
-  //  MCUSR &= ~(1<<WDRF);
+//    MCUSR &= ~(1<<WDRF);
     
     /* In order to change WDE or the prescaler, we need to
      * set WDCE (This will allow updates for 4 clock cycles).
      */
-  //  WDTCSR |= (1<<WDCE) | (1<<WDE);
+//    WDTCSR |= (1<<WDCE) | (1<<WDE);
   
     /* set new watchdog timeout prescaler value */
-  //  WDTCSR = 1<<WDP0 | 1<<WDP3; /* 8.0 seconds */
+//    WDTCSR = 1<<WDP0 | 1<<WDP3; /* 8.0 seconds */
     
     /* Enable the WD interrupt (note no reset). */
-  //  WDTCSR |= _BV(WDIE);
+//    WDTCSR |= _BV(WDIE);
   // 
     
     Serial.println("Initialisation complete.");
 
-      attachInterrupt(0, countRPM, FALLING);
-      attachInterrupt(1, enableBLE, FALLING);
+      attachInterrupt(3, countRPM, FALLING);
+//      attachInterrupt(1, enableBLE, FALLING);
   //  delay(100);
   }
   
@@ -191,6 +207,7 @@
       }
       hadRound=0;
       delay(100);
+      enableBLE();
     } 
    digitalWrite(pinOut,LOW);
    if (debug==HIGH) {
@@ -215,23 +232,25 @@
 //    ble_do_events();  
     delay(100);
     if (beginBLETime>0) {
-      // we don't go into sleep after one minute of pressing the BLE button!    
+      // we don't go into sleep after one minute of pressing the BLE button!    /
       long runningMillis=millis()-beginBLETime;
       
-      if (ble_available() )
-      {
-         // write to BLE (even if not connected)
-        String output = "D: ";
-        output+=distanceToDate;
-        output+="\n";
-        int length= output.length()+1;
-        char charBuf[length];
-        output.toCharArray(charBuf,output.length()+1);
-        for (int i=0; i<length;i++) {
-          ble_write(charBuf[i]);
-        } 
-  
+ uint8_t temp;
+    while ( ble_available() )
+    {
+      temp = ble_read();
+      if ('r' == temp) { // read comand from smartphone)
+          stroller_ble_print();
+      } 
+      else if ( 'c' == temp ) { // aCcept or commit command from smartphone, later used for resetting
+
+        ble_write('r');
+        ble_write('\n');
+      }
     }
+
+  
+    
     if ( runningMillis>20000) {
        // in the next iteration, stop this maddness and go back to sleep
        beginBLETime=0;
