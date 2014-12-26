@@ -91,11 +91,11 @@ void stroller_ble_print() {
     Serial.println("printing distance");
   #endif
   if (ble_connected()) {
-              char output[25];
-            // length of output should be: 5 fixed, 10 time, 10 distance;
+              char output[26];
+            // length of output should be: 5 fixed, 10 time, 10 distance, but must be one longer?!?
          sprintf(output,"D:%10lu:%10lu\n\n",time,curDistance);
           
-          ble_write_bytes((unsigned char *)output,25);
+          ble_write_bytes((unsigned char *)output,26);
   }
 }
 
