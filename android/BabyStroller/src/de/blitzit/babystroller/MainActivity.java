@@ -57,6 +57,20 @@ public class MainActivity extends Activity {
 					BluetoothAdapter.ACTION_REQUEST_ENABLE);
 			startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
 		}
+		
+		
+	}
+	
+	@Override
+	protected void onRestart() {
+		super.onRestart();
+//		mBluetoothAdapter.
+		mDevices = new ArrayList<BluetoothDevice>();
+	}
+	
+	@Override
+	protected void onStart() {
+		super.onStart();
 		TextView statusIndicator=(TextView)findViewById(R.id.status);
 		statusIndicator.setVisibility(1);
 		statusIndicator.setText("Scanning...");
@@ -99,11 +113,11 @@ public class MainActivity extends Activity {
 				for (BluetoothDevice device : mDevices) {
 					if (ARDUINO_NAME.equalsIgnoreCase(device.getName())) {
 						// we found it! 
-						System.out.println("Found the stroller!");
 						found=true;
 						startNextActvitiy(device);
 					    
 					}
+					break;
 				}
 				if (!found) {
 				runOnUiThread(new Runnable() {
