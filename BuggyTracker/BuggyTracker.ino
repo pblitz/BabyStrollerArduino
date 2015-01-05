@@ -19,9 +19,9 @@
 //#define timeBetweenRounds 1800L // 30 minutes
 
 #if DEBUG
-  #define timeBetweenRounds 7L // 16 seconds (two wakelock periods) for testing
+#define timeBetweenRounds 7L // 16 seconds (two wakelock periods) for testing
 #else
-  #define timeBetweenRounds 300L // 5 minutes  
+#define timeBetweenRounds 300L // 5 minutes  
 #endif
 long curDistance = 0;  
 #define LED  13
@@ -38,26 +38,26 @@ long beginRun = 0;
 
 void setup()
 {  
-//  pinMode(LED, OUTPUT);
+  //  pinMode(LED, OUTPUT);
 
   attachInterrupt(interupt, BtnDownCB, FALLING );
 
   // Call the function to enable low power consumption
-  #if !NORMALPOW
-    ble_low_power();
-  #else 
-   Serial.begin(9600);
-  #endif
+#if !NORMALPOW
+  ble_low_power();
+#else 
+  Serial.begin(9600);
+#endif
   time =1; // init the time to 1, to make it different from 0
   // If you are using the Blend, uncomment below
   ble_set_pins(6, 7);
-   ble_set_name("Stroller");
+  ble_set_name("Stroller");
 
   // Init. and start BLE library.
   ble_begin();
 
   // prepare SD data logging!
-//
+  //
   if (!SD.begin(10, 11, 12, 13)) { // important: this is custom code for the leonardo, see https://learn.adafruit.com/adafruit-data-logger-shield/for-the-mega-and-leonardo
 
   } 
@@ -65,37 +65,37 @@ void setup()
 
     // Open up the file we're going to log to!
     dataFile = SD.open("datalog.txt", FILE_WRITE);
-     runs=SD.open("run.txt",FILE_WRITE);
+    runs=SD.open("run.txt",FILE_WRITE);
   }
 
 
-//  setSyncProvider(RTC.get);
+  //  setSyncProvider(RTC.get);
 }
 
 
-  ISR(WDT_vect)
-  {
-    #if DEBUG
-    if (ble_connected()) {
-            ble_write_bytes((unsigned char *)"wakelock",8);
+ISR(WDT_vect)
+{
+#if DEBUG
+  if (ble_connected()) {
+    ble_write_bytes((unsigned char *)"wakelock",8);
 
-    }
-    #endif
-    time = time +8;
-    
   }
+#endif
+  time = time +8;
+
+}
 
 
 void stroller_ble_print() {
-  #if NORMALPOW
-    Serial.println("printing distance");
-  #endif
+#if NORMALPOW
+  Serial.println("printing distance");
+#endif
   if (ble_connected()) {
-              char output[26];
-            // length of output should be: 5 fixed, 10 time, 10 distance, but must be one longer?!?
-         sprintf(output,"D:%10lu:%10lu\n\n",time,curDistance);
-          
-          ble_write_bytes((unsigned char *)output,26);
+    char output[26];
+    // length of output should be: 5 fixed, 10 time, 10 distance, but must be one longer?!?
+    sprintf(output,"D:%10lu:%10lu\n\n",time,curDistance);
+
+    ble_write_bytes((unsigned char *)output,26);
   }
 }
 
@@ -104,58 +104,56 @@ void loop()
 {
 
   if (hadRound== 1) {
-    #if NORMALPOW
+#if NORMALPOW
     Serial.println("had round");
-  #endif
+#endif
     // compare the time of the last logged or the current logged value
     // the actual calculation
-      if (beginRun==0) {
-        beginRun=time;
-      } 
-      if (lastMeasurement == 0 ){
-        lastMeasurement = time;
+    if (beginRun==0) {
+      beginRun=time;
+    } 
+    if (lastMeasurement == 0 ){
+      lastMeasurement = time;
+    }
+    curDistance = curDistance + distance;
+    //
+    //      // write to SD card
+
+    ////      // here, we can write the full, readable timestamp:
+    char output[25];
+    // length of output should be: 5 fixed, 10 time, 10 distance;
+    sprintf(output,"R:%10lu:%10lu\n",time,curDistance);
+    dataFile.write(output,25);
+    dataFile.flush();
+
+    byte reset= 0;
+#if DEBUG
+    if (ble_connected()) {
+      char temp[32];
+      sprintf(temp,"resetting:%10lu:%10lu\n",lastMeasurement,time);
+      ble_write_bytes( (unsigned char *)temp,32);
+    }
+#endif
+    if ((time-lastMeasurement)>timeBetweenRounds) {
+#if DEBUG
+      if (ble_connected()) {
+        ble_write_bytes( (unsigned char *)"reset\n",6);
       }
-      curDistance = curDistance + distance;
-//
-//      // write to SD card
-
-////      // here, we can write the full, readable timestamp:
-              char output[25];
-            // length of output should be: 5 fixed, 10 time, 10 distance;
-            sprintf(output,"R:%10lu:%10lu\n",time,curDistance);
-            dataFile.write(output,25);
-            dataFile.flush();
-
-      byte reset= 0;
-              #if DEBUG
-          if (ble_connected()) {
-                      char temp[32];
-            sprintf(temp,"resetting:%10lu:%10lu\n",lastMeasurement,time);
-             ble_write_bytes( (unsigned char *)temp,32);
-          }
-        #endif
-      if ((time-lastMeasurement)>timeBetweenRounds) {
-              #if DEBUG
-          if (ble_connected()) {
-
-
-             ble_write_bytes( (unsigned char *)"reset\n",6);
-          }
-        #endif
-          reset=1;
-          char result[37];
-          // length of output should be: 7 fixed, 10 begin, 10 time , 10 distance;
-          sprintf(result,"Run:%10lu:%10lu:%10lu\n",beginRun,time,curDistance);
-          runs.write(result,37);
-        runs.flush();
-        curDistance=distance;
-        beginRun=millis();
-      }
-        #if DEBUG
-          stroller_ble_print();
-        #endif
-          lastMeasurement = time;
-          hadRound=0;
+#endif
+      reset=1;
+      char result[37];
+      // length of output should be: 7 fixed, 10 begin, 10 time , 10 distance;
+      sprintf(result,"Run:%10lu:%10lu:%10lu\n",beginRun,time,curDistance);
+      runs.write(result,37);
+      runs.flush();
+      curDistance=distance;
+      beginRun=millis();
+    }
+#if DEBUG
+    stroller_ble_print();
+#endif
+    lastMeasurement = time;
+    hadRound=0;
 
   }
   if (ble_available() )
@@ -165,7 +163,7 @@ void loop()
     {
       temp = ble_read();
       if ('r' == temp) { // read comand from smartphone)
-          stroller_ble_print();
+        stroller_ble_print();
       } 
       else if ( 'c' == temp ) { // aCcept or commit command from smartphone, later used for resetting
         curDistance=0;
@@ -174,10 +172,10 @@ void loop()
       }
     }
   }
-//  delay(50);
+  //  delay(50);
 #if DEBUG
   digitalWrite(LED,LOW);
-  #endif
+#endif
   ble_do_events();  
 }
 
@@ -185,11 +183,12 @@ void BtnDownCB()
 {   
   PRR0 = 0x00;  // Power Reduction Register: open timer
   PRR1 = 0x00;
-  #if DEBUG
+#if DEBUG
   digitalWrite(LED,HIGH);
-    #endif
+#endif
   hadRound = 1;
 }
+
 
 
 
