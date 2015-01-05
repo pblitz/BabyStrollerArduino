@@ -85,6 +85,22 @@ ISR(WDT_vect)
 
 }
 
+void resetRun() {
+
+#if DEBUG
+  if (ble_connected()) {
+    ble_write_bytes( (unsigned char *)"reset\n",6);
+  }
+#endif
+  char result[37];
+  // length of output should be: 7 fixed, 10 begin, 10 time , 10 distance;
+  sprintf(result,"Run:%10lu:%10lu:%10lu\n",beginRun,time,curDistance);
+  runs.write(result,37);
+  runs.flush();
+  curDistance=distance;
+  beginRun=millis();
+
+}
 
 void stroller_ble_print() {
 #if NORMALPOW
@@ -104,6 +120,7 @@ void loop()
 {
 
   if (hadRound== 1) {
+
 #if NORMALPOW
     Serial.println("had round");
 #endif
@@ -115,7 +132,22 @@ void loop()
     if (lastMeasurement == 0 ){
       lastMeasurement = time;
     }
+    // actually increase the round
     curDistance = curDistance + distance;
+
+#if DEBUG
+    if (ble_connected()) {
+      char temp[32];
+      sprintf(temp,"resetting:%10lu:%10lu\n",lastMeasurement,time);
+      ble_write_bytes( (unsigned char *)temp,32);
+    }
+#endif
+    if ((time-lastMeasurement)>timeBetweenRounds) {
+      resetRun();
+    }
+#if DEBUG
+    stroller_ble_print();
+#endif
     //
     //      // write to SD card
 
@@ -126,32 +158,6 @@ void loop()
     dataFile.write(output,25);
     dataFile.flush();
 
-    byte reset= 0;
-#if DEBUG
-    if (ble_connected()) {
-      char temp[32];
-      sprintf(temp,"resetting:%10lu:%10lu\n",lastMeasurement,time);
-      ble_write_bytes( (unsigned char *)temp,32);
-    }
-#endif
-    if ((time-lastMeasurement)>timeBetweenRounds) {
-#if DEBUG
-      if (ble_connected()) {
-        ble_write_bytes( (unsigned char *)"reset\n",6);
-      }
-#endif
-      reset=1;
-      char result[37];
-      // length of output should be: 7 fixed, 10 begin, 10 time , 10 distance;
-      sprintf(result,"Run:%10lu:%10lu:%10lu\n",beginRun,time,curDistance);
-      runs.write(result,37);
-      runs.flush();
-      curDistance=distance;
-      beginRun=millis();
-    }
-#if DEBUG
-    stroller_ble_print();
-#endif
     lastMeasurement = time;
     hadRound=0;
 
@@ -168,6 +174,7 @@ void loop()
       else if ( 'c' == temp ) { // aCcept or commit command from smartphone, later used for resetting
         curDistance=0;
         ble_write('r');
+        resetRun();
         ble_write('\n');
       }
     }
@@ -188,6 +195,7 @@ void BtnDownCB()
 #endif
   hadRound = 1;
 }
+
 
 
 
