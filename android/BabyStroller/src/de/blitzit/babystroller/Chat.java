@@ -1,8 +1,11 @@
 package de.blitzit.babystroller;
 
+import java.text.DecimalFormat;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import android.app.Activity;
 import android.bluetooth.BluetoothGattCharacteristic;
@@ -14,6 +17,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
 import android.util.Log;
 import android.view.MenuItem;
@@ -33,31 +37,38 @@ public class Chat extends Activity {
 	private String mDeviceName;
 	private Button btnRetry;
 	private String mDeviceAddress;
-	private TextView label;
+	private TextView result;
+	private String currentLine;
+	private TextView rawResult;
 	private RBLService mBluetoothLeService;
 	private Map<UUID, BluetoothGattCharacteristic> map = new HashMap<UUID, BluetoothGattCharacteristic>();
 
-	private final ServiceConnection mServiceConnection = new ServiceConnection() {
+	private ServiceConnection mServiceConnection;
 
-		@Override
-		public void onServiceConnected(ComponentName componentName,
-				IBinder service) {
-			mBluetoothLeService = ((RBLService.LocalBinder) service)
-					.getService();
-			if (!mBluetoothLeService.initialize()) {
-				Log.e(TAG, "Unable to initialize Bluetooth");
-				finish();
+	private ServiceConnection createServiceConnection() {
+		ServiceConnection connection = new ServiceConnection() {
+
+			@Override
+			public void onServiceConnected(ComponentName componentName,
+					IBinder service) {
+				mBluetoothLeService = ((RBLService.LocalBinder) service)
+						.getService();
+				if (!mBluetoothLeService.initialize()) {
+					Log.e(TAG, "Unable to initialize Bluetooth");
+					finish();
+				}
+				// Automatically connects to the device upon successful start-up
+				// initialization.
+				mBluetoothLeService.connect(mDeviceAddress);
 			}
-			// Automatically connects to the device upon successful start-up
-			// initialization.
-			mBluetoothLeService.connect(mDeviceAddress);
-		}
 
-		@Override
-		public void onServiceDisconnected(ComponentName componentName) {
-			mBluetoothLeService = null;
-		}
-	};
+			@Override
+			public void onServiceDisconnected(ComponentName componentName) {
+				mBluetoothLeService = null;
+			}
+		};
+		return connection;
+	}
 
 	private final BroadcastReceiver mGattUpdateReceiver = new BroadcastReceiver() {
 		@Override
@@ -65,17 +76,25 @@ public class Chat extends Activity {
 			final String action = intent.getAction();
 
 			if (RBLService.ACTION_GATT_DISCONNECTED.equals(action)) {
-				
+
 			} else if (RBLService.ACTION_GATT_SERVICES_DISCOVERED
 					.equals(action)) {
 				getGattService(mBluetoothLeService.getSupportedGattService());
 				Log.d(TAG, "Service discoverd!");
-				instanciateConnection();
+				new Handler().postDelayed(new Runnable() {
+					
+					@Override
+					public void run() {
+						instanciateConnection();
+						
+					}
+				},500);
+				
 			} else if (RBLService.ACTION_DATA_AVAILABLE.equals(action)) {
 				displayData(intent.getByteArrayExtra(RBLService.EXTRA_DATA));
 			} else if (RBLService.ACTION_GATT_CONNECTED.equals(action)) {
 				Log.d(TAG, "Service connected!");
-//				instanciateConnection();
+				// instanciateConnection();
 			}
 		}
 	};
@@ -86,7 +105,7 @@ public class Chat extends Activity {
 		BluetoothGattCharacteristic characteristic = map
 				.get(RBLService.UUID_BLE_SHIELD_TX);
 
-		String str = "on"; 
+		String str = "r";
 		byte b = 0x00;
 		byte[] tmp = str.getBytes();
 		byte[] tx = new byte[tmp.length + 1];
@@ -94,42 +113,53 @@ public class Chat extends Activity {
 		for (int i = 1; i < tmp.length + 1; i++) {
 			tx[i] = tmp[i - 1];
 		}
-
 		characteristic.setValue(tx);
 		mBluetoothLeService.writeCharacteristic(characteristic);
-		Log.d(TAG,"sending out data to instanciate connection!");
+		Log.d(TAG, "sending out data to instanciate connection!");
 	}
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		chat = this;
-		
+
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.second);
 
-		
 		btn = (Button) findViewById(R.id.send);
 		btnRetry = (Button) findViewById(R.id.retry);
-		label = (TextView) findViewById(R.id.result);
-		
+		result = (TextView) findViewById(R.id.result);
+		rawResult = (TextView) findViewById(R.id.resultRaw);
 		btnRetry.setOnClickListener(new OnClickListener() {
-			
+
 			@Override
 			public void onClick(View v) {
-				unregisterReceiver(mGattUpdateReceiver);
-				mBluetoothLeService.disconnect();
-				mBluetoothLeService.close();
-				Intent gattServiceIntent2 = new Intent(chat, RBLService.class);
-				bindService(gattServiceIntent2, mServiceConnection, BIND_AUTO_CREATE);
-				
+				try {
+					if (!mBluetoothLeService.isConnected()) {
+						connectToDevice();
+					} else {
+						instanciateConnection();
+					}
+
+				} catch (Exception e) {
+					Log.d(TAG,
+							"Exception trying the data connection, retyring.. ",
+							e);
+//					unregisterReceiver(mGattUpdateReceiver);
+					mBluetoothLeService.disconnect();
+					mBluetoothLeService.close();
+					
+					connectToDevice();
+//					registerReceiver(mGattUpdateReceiver,
+//							makeGattUpdateIntentFilter());
+				}
 			}
 		});
-		
+
 		btn.setOnClickListener(new OnClickListener() {
 
 			@Override
 			public void onClick(View v) {
-			
+
 			}
 		});
 
@@ -140,7 +170,11 @@ public class Chat extends Activity {
 
 		getActionBar().setTitle(mDeviceName);
 		getActionBar().setDisplayHomeAsUpEnabled(false);
+		connectToDevice();
+	}
 
+	private void connectToDevice() {
+		mServiceConnection = createServiceConnection();
 		Intent gattServiceIntent = new Intent(this, RBLService.class);
 		bindService(gattServiceIntent, mServiceConnection, BIND_AUTO_CREATE);
 	}
@@ -178,16 +212,49 @@ public class Chat extends Activity {
 		mBluetoothLeService.disconnect();
 		mBluetoothLeService.close();
 
-		System.exit(0);
+		// System.exit(0);
 	}
 
 	private void displayData(byte[] byteArray) {
-		
+
 		if (byteArray != null) {
 			String data = new String(byteArray);
-			Log.d(TAG, data);
-			label.setText(data);
-			
+			// Log.d(TAG, data);
+			data = data.replaceAll("\0", "");
+
+			if (data.startsWith("D:")) {
+				// we have a new line, probably
+				currentLine = data;
+			} else {
+				currentLine = currentLine + data;
+			}
+			rawResult.setText(currentLine);
+			if (currentLine.matches(".*\n\n")) {
+				// end of a line
+				Log.d(TAG, "Completed a line transfer: " + currentLine);
+				Pattern matchPattern = Pattern
+						.compile("D:\\s*(\\d*):\\s*(\\d*)\n\n");
+				Matcher tagmatch = matchPattern.matcher(currentLine);
+				while (tagmatch.find()) {
+					String time = tagmatch.group(1);
+					String distance = tagmatch.group(2);
+					Long dist = Long.parseLong(distance);// in mm for now!
+					double distanceM = (dist / (long) 1000);
+					DecimalFormat df2 = new DecimalFormat("#,##0.00");
+
+					result.setText("Current Distance: " + df2.format(distanceM)
+							+ "m");
+					Log.i(TAG, "Parsed info into: " + time + " seconds and "
+							+ distanceM + "m");
+				}
+
+				// terminating the connection after it worked !
+//				unregisterReceiver(mGattUpdateReceiver);
+				mBluetoothLeService.disconnect();
+				mBluetoothLeService.close();
+//				connected = false;
+			}
+
 		}
 	}
 

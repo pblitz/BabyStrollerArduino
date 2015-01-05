@@ -337,4 +337,11 @@ public class RBLService extends Service {
 
 		return mBluetoothGatt.getService(UUID_BLE_SHIELD_SERVICE);
 	}
+	
+	public Boolean isConnected() {
+		if (mBluetoothAdapter == null || mBluetoothGatt == null) {
+			return false;
+		}
+		return true;
+	}
 }
